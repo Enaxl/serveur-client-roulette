@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  serveur:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: roulette_serveur
+    ports:
+      - "5000:5000"
+    command: ./serveur_bin
+
+  client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: roulette_client
+    depends_on:
+      - serveur
+    command: ./client_bin serveur "Hello depuis Docker"
