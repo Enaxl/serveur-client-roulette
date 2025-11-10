@@ -1,5 +1,21 @@
-COMPOSE := docker compose -f docker/docker-compose.yml
+COMPOSE := docker compose -f docker/docker-compose.yaml
 EXEC    := $(COMPOSE) exec
+CC = gcc
+CFLAGS = -Wall -Wextra -std=c11
+
+CLIENT_SRC = app/Connexion/client.c
+SERVER_SRC = app/Connexion/serveur.c
+
+all: client_bin serveur_bin
+
+client_bin: $(CLIENT_SRC)
+	$(CC) $(CFLAGS) -o $@ $^
+
+serveur_bin: $(SERVER_SRC)
+	$(CC) $(CFLAGS) -o $@ $^
+
+clean:
+	rm -f client_bin serveur_bin
 
 up:
 	$(COMPOSE) up -d
@@ -16,6 +32,4 @@ build:
 ps:
 	$(COMPOSE) ps
 
-cc: ## Clear cache
-	$(CONSOLE) cache:clear
 
