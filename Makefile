@@ -3,8 +3,8 @@ EXEC    := $(COMPOSE) exec
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
 
-CLIENT_SRC = app/Connexion/client.c
-SERVER_SRC = app/Connexion/serveur.c
+CLIENT_SRC = app/client/client.c
+SERVER_SRC = app/serveur/serveur.c
 
 all: client_bin serveur_bin
 
