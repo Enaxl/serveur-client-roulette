@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "network.h"
+#include "../serveur/network.h"
 
 int main(int argc, char **argv) {
     if (argc != 3) {
