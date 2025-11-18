@@ -37,27 +37,41 @@ int accept_client(int server_sock) {
     return client_sock;
 }
 
+/* -----------------------------------------------
+   Version corrigée qui fonctionne sous Alpine
+   (remplace gethostbyname par getaddrinfo)
+------------------------------------------------- */
 int connect_to_server(const char *host, int port) {
     int sock;
-    struct sockaddr_in server_addr;
-    struct hostent *server;
+    struct addrinfo hints, *res;
+    char port_str[6];
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) { perror("socket"); exit(1); }
+    snprintf(port_str, sizeof(port_str), "%d", port);
 
-    server = gethostbyname(host);
-    if (server == NULL) { fprintf(stderr, "Hôte inconnu\n"); exit(1); }
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;         // IPv4
+    hints.ai_socktype = SOCK_STREAM;   // TCP
 
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(port);
-
-    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("connect");
+    if (getaddrinfo(host, port_str, &hints, &res) != 0) {
+        perror("getaddrinfo");
         exit(1);
     }
 
+    sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sock < 0) {
+        perror("socket");
+        freeaddrinfo(res);
+        exit(1);
+    }
+
+    if (connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
+        perror("connect");
+        close(sock);
+        freeaddrinfo(res);
+        exit(1);
+    }
+
+    freeaddrinfo(res);
     return sock;
 }
 
