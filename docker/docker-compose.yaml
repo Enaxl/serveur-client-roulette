@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: roulette_serveur
+    container_name: serveur
     ports:
       - "5000:5000"
     command: ./serveur_bin
@@ -14,7 +14,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: roulette_client
+    container_name: client
     depends_on:
       - serveur
-    command: ./client_bin serveur "Hello depuis Docker"
+

@@ -1,19 +1,36 @@
 #include <stdio.h>
+#include <string.h>
 #include "../serveur/network.h"
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <serveur> <message>\n", argv[0]);
-        return 1;
-    }
+    char pseudo[64];
+    char input[256];
+    int sock;
 
-    int sock = connect_to_server(argv[1], 5000);
-    send_message(sock, argv[2]);
+    printf("Pseudo ? ");
+    fgets(pseudo, sizeof(pseudo), stdin);
+    pseudo[strcspn(pseudo, "\n")] = 0;
 
-    char buffer[256];
-    int n = receive_message(sock, buffer, sizeof(buffer));
-    if (n > 0) {
-        printf("Réponse du serveur : %s\n", buffer);
+    sock = connect_to_server("serveur", 5000);
+    send_message(sock, pseudo);
+
+    // --- Boucle interactive ---
+    while (1) {
+        printf("Commande > ");
+        if (!fgets(input, sizeof(input), stdin)) break;
+
+        input[strcspn(input, "\n")] = 0;
+        if (strlen(input) == 0) continue;
+
+        if (strcmp(input, "QUIT") == 0) break;
+
+        send_message(sock, input);
+
+        char buffer[512];
+        int n = receive_message(sock, buffer, sizeof(buffer));
+        if (n > 0) {
+            printf("%s\n", buffer);
+        }
     }
 
     close_socket(sock);

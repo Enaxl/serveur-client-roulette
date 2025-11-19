@@ -1,21 +1,40 @@
-COMPOSE := docker compose -f docker/docker-compose.yaml
-EXEC    := $(COMPOSE) exec
+# -------------------
+# Compilateur et flags
+# -------------------
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
 
+INCLUDES = -Iapp/client -Iapp/serveur -Iapp/entity -Iapp/manager -Iapp/games
+
+CLIENT_BIN = client_bin
+SERVEUR_BIN = serveur_bin
+
+# -------------------
+# Sources
+# -------------------
 CLIENT_SRC = app/client/client.c app/serveur/network.c
-SERVER_SRC = app/serveur/serveur.c app/serveur/network.c
+SERVEUR_SRC = app/serveur/serveur.c app/serveur/network.c \
+              app/entity/player.c app/manager/player_manager.c app/games/roulette.c
 
-all: client_bin serveur_bin
+# -------------------
+# Règles de compilation
+# -------------------
+all: $(CLIENT_BIN) $(SERVEUR_BIN)
 
-client_bin: $(CLIENT_SRC)
-	$(CC) $(CFLAGS) -o $@ $^
+$(CLIENT_BIN):
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(CLIENT_SRC)
 
-serveur_bin: $(SERVER_SRC)
-	$(CC) $(CFLAGS) -o $@ $^
+$(SERVEUR_BIN):
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(SERVEUR_SRC)
 
 clean:
-	rm -f client_bin serveur_bin
+	rm -f $(CLIENT_BIN) $(SERVEUR_BIN)
+
+# -------------------
+# Docker / Compose
+# -------------------
+COMPOSE = docker compose -f docker/docker-compose.yaml
+EXEC    = $(COMPOSE) exec
 
 up:
 	$(COMPOSE) up -d
@@ -23,11 +42,11 @@ up:
 down:
 	$(COMPOSE) down
 
-logs:
-	$(COMPOSE) logs -f app
-
 build:
 	$(COMPOSE) up -d --build --remove-orphans
+
+logs:
+	$(COMPOSE) logs -f
 
 ps:
 	$(COMPOSE) ps
