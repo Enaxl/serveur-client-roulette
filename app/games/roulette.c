@@ -30,7 +30,7 @@ void handle_roulette(Player *p, const char *command) {
     // 4) Résolution du pari
     if (strcmp(bet_type, "number") == 0) {
         int chosen = atoi(bet_value);
-        if (chosen == result.number) gain = bet_amount * 36;
+        if (chosen == result.number) gain = bet_amount * 35;
     }
     else if (strcmp(bet_type, "color") == 0) {
         if (strcmp(bet_value, result.color) == 0) gain = bet_amount * 2;
