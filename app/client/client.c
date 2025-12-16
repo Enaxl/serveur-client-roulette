@@ -1,36 +1,50 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include "../serveur/network.h"
 
-int main(int argc, char **argv) {
-    char pseudo[64];
-    char input[256];
-    int sock;
+int main() {
+    char pseudo[64], input[256], buffer[512];
 
-    printf("Pseudo ? ");
+    // Désactive le buffering stdout pour Docker/Alpine
+    setvbuf(stdout, NULL, _IONBF, 0);
+
+    printf("Tentative de connexion au serveur...\n");
+
+    int sock = connect_to_server("serveur", 5000);
+    printf("Connexion réussie !\n");
+
+    // --- Pseudo ---
+    receive_line(sock, buffer, sizeof(buffer));
+    printf("%s\n", buffer);  // "Pseudo ?"
+
     fgets(pseudo, sizeof(pseudo), stdin);
     pseudo[strcspn(pseudo, "\n")] = 0;
+    send_line(sock, pseudo);
 
-    sock = connect_to_server("serveur", 5000);
-    send_message(sock, pseudo);
+    // --- Message de bienvenue ---
+    receive_line(sock, buffer, sizeof(buffer));
+    printf("%s\n", buffer);
 
     // --- Boucle interactive ---
     while (1) {
-        printf("Commande > ");
-        if (!fgets(input, sizeof(input), stdin)) break;
+        // Prompt côté client
+        printf("Commande > \n"");
+        fflush(stdout);
 
+        // Lecture utilisateur
+        if (!fgets(input, sizeof(input), stdin)) break;
         input[strcspn(input, "\n")] = 0;
         if (strlen(input) == 0) continue;
-
         if (strcmp(input, "QUIT") == 0) break;
 
-        send_message(sock, input);
+        // Envoi commande
+        send_line(sock, input);
 
-        char buffer[512];
-        int n = receive_message(sock, buffer, sizeof(buffer));
-        if (n > 0) {
-            printf("%s\n", buffer);
-        }
+        // Réception résultat
+        receive_line(sock, buffer, sizeof(buffer));
+        printf("%s\n", buffer);
     }
 
     close_socket(sock);
