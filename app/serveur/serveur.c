@@ -11,7 +11,6 @@ void handle_client(int client_sock) {
     send_line(client_sock, "Pseudo ?");
     int n = receive_line(client_sock, buffer, sizeof(buffer));
     if (n <= 0) return;
-    buffer[strcspn(buffer, "\n")] = 0;
 
     Player *p = create_player_for_socket(client_sock, buffer);
     if (!p) {
@@ -23,16 +22,12 @@ void handle_client(int client_sock) {
     send_line(client_sock, "Bienvenue ! Exemple : GAME roulette MISE 10 number 17");
 
     while (1) {
-        send_line(client_sock, "Commande >>");
-
         n = receive_line(client_sock, buffer, sizeof(buffer));
         if (n <= 0) {
             printf("Déconnexion : %s\n", p->pseudo);
             return;
         }
 
-        buffer[strcspn(buffer, "\n")] = 0;
-        if (strlen(buffer) == 0) continue;
         if (p->total_coins == 0) {
             send_line(client_sock, "Vous n'avez plus de jetons, déconnexion.");
             return;
@@ -41,7 +36,7 @@ void handle_client(int client_sock) {
         printf("[%s] commande reçue : %s\n", p->pseudo, buffer);
 
         char game[32], command[224];
-        if (sscanf(buffer, "GAME %31s %223[^\n]", game, command) < 1) {
+        if (sscanf(buffer, "GAME %31s %223[^\n]", game, command) != 2) {
             send_line(client_sock, "Format invalide.");
             continue;
         }
@@ -54,9 +49,11 @@ void handle_client(int client_sock) {
     }
 }
 
+
+
 int main() {
     int server_sock = create_server(5000);
-    printf("Serveur en écoute sur le port 5000...\n");
+    printf("Serveur en écoute sur le port 5000...");
 
     init_player_manager();
 

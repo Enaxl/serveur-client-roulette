@@ -30,7 +30,7 @@ int main() {
     // --- Boucle interactive ---
     while (1) {
         // Prompt côté client
-        printf("Commande > \n"");
+        printf("Commande > \n");
         fflush(stdout);
 
         // Lecture utilisateur

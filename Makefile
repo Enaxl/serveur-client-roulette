@@ -39,6 +39,11 @@ EXEC    = $(COMPOSE) exec
 up:
 	$(COMPOSE) up -d
 
+rebuild:
+	$(COMPOSE) down
+	$(COMPOSE) build --no-cache
+	$(COMPOSE) up -d
+
 down:
 	$(COMPOSE) down
 

@@ -37,15 +37,17 @@ int accept_client(int server_sock) {
 int connect_to_server(const char *host, int port) {
     struct addrinfo hints = {0}, *res;
     char port_str[6];
-    snprintf(port_str, sizeof(port_str), "%d\n"", port);
+    snprintf(port_str, sizeof(port_str), "%d", port);
 
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
-    if (getaddrinfo(host, port_str, &hints, &res) != 0) {
-        perror("getaddrinfo"); exit(1);
+    int err = getaddrinfo(host, port_str, &hints, &res);
+    if (err != 0) {
+        fprintf(stderr, "getaddrinfo(%s:%s): %s\n",
+                host, port_str, gai_strerror(err));
+        exit(1);
     }
-
     int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sock < 0) { perror("socket"); freeaddrinfo(res); exit(1); }
 
@@ -74,6 +76,10 @@ int receive_line(int sock, char *buffer, int size) {
     }
     buffer[i] = '\0';
     return i;
+}
+
+int send_message(int sock, const char *msg) {
+    return write(sock, msg, strlen(msg));
 }
 
 void close_socket(int sock) {
