@@ -8,5 +8,6 @@
 void init_player_manager();
 Player* get_player_by_socket(int sock);
 Player* create_player_for_socket(int sock, const char *pseudo);
+void remove_player_by_socket(int sock);
 
 #endif

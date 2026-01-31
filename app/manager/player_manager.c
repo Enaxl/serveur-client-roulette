@@ -1,24 +1,37 @@
 #include "player_manager.h"
 #include <string.h>
+#include <pthread.h>
 
 static Player players[MAX_PLAYERS];
 static int player_count = 0;
+pthread_mutex_t players_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void init_player_manager() {
+    pthread_mutex_lock(&players_mutex);
     player_count = 0;
-}
-
-Player* get_player_by_socket(int sock) {
-    for (int i = 0; i < player_count; i++)
-        if (players[i].client_socket == sock)
-            return &players[i];
-
-    return NULL;
+    pthread_mutex_unlock(&players_mutex);
 }
 
 Player* create_player_for_socket(int sock, const char *pseudo) {
-    if (player_count >= MAX_PLAYERS) return NULL;
-
+    pthread_mutex_lock(&players_mutex);
+    if (player_count >= MAX_PLAYERS) {
+        pthread_mutex_unlock(&players_mutex);
+        return NULL;
+    }
     players[player_count] = create_player(pseudo, sock);
-    return &players[player_count++];
+    Player* p = &players[player_count++];
+    pthread_mutex_unlock(&players_mutex);
+    return p;
+}
+
+void remove_player_by_socket(int sock) {
+    pthread_mutex_lock(&players_mutex);
+    for (int i = 0; i < player_count; i++) {
+        if (players[i].client_socket == sock) {
+            players[i] = players[player_count - 1];
+            player_count--;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&players_mutex);
 }

@@ -1,68 +1,99 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include "../serveur/network.h"
-#include "../games/roulette.h"
-#include "../entity/player.h"
+#include <pthread.h>
+#include <unistd.h>
+#include "network.h"
 #include "../manager/player_manager.h"
+#include "../games/roulette.h"
 
-void handle_client(int client_sock) {
+void* handle_client(void* arg) {
+    int client_sock = *((int*)arg);
+    free(arg);
     char buffer[256];
 
-    send_line(client_sock, "Pseudo ?");
-    int n = receive_line(client_sock, buffer, sizeof(buffer));
-    if (n <= 0) return;
+    // 1. Accueil et Pseudo
+    send_line(client_sock, "Bienvenue au Casino ! Quel est votre pseudo ?");
+    if (receive_line(client_sock, buffer, sizeof(buffer)) <= 0) {
+        close(client_sock);
+        return NULL;
+    }
+    buffer[strcspn(buffer, "\n")] = 0;
 
     Player *p = create_player_for_socket(client_sock, buffer);
     if (!p) {
-        send_line(client_sock, "Erreur : impossible de créer le joueur.");
-        return;
+        send_line(client_sock, "Serveur plein.");
+        close(client_sock);
+        return NULL;
     }
 
-    printf("Nouveau joueur connecté : %s\n", p->pseudo);
-    send_line(client_sock, "Bienvenue ! Exemple : GAME roulette MISE 10 number 17");
-
+    // 2. Boucle du Lobby (Menu Principal)
     while (1) {
-        n = receive_line(client_sock, buffer, sizeof(buffer));
-        if (n <= 0) {
-            printf("Déconnexion : %s\n", p->pseudo);
-            return;
+        send_line(client_sock, "\n=== MENU CASINO ===");
+        send_line(client_sock, "1. Roulette (Salle d'attente)");
+        send_line(client_sock, "2. Quitter");
+        send_line(client_sock, "END_MSG");
+
+        if (receive_line(client_sock, buffer, sizeof(buffer)) <= 0) break;
+
+        // --- SECTION ROULETTE (C'est ICI que tu mets ton bloc) ---
+        if (strncmp(buffer, "1", 1) == 0) {
+            handle_roulette_waiting(p);
+
+            // Boucle interne : Le joueur est dans la salle
+            while (1) {
+                if (receive_line(client_sock, buffer, sizeof(buffer)) <= 0) {
+                    leave_roulette(p);
+                    goto cleanup; // Sortie forcée si déconnexion
+                }
+
+                if (strncmp(buffer, "MISE", 4) == 0) {
+                    int amount; char type[32], val[32];
+                    if (sscanf(buffer, "MISE %d %s %s", &amount, type, val) == 3) {
+                        if (check_coins(p, amount)) {
+                            remove_coins(p, amount);
+                            place_roulette_bet(p, amount, type, val);
+                            send_line(client_sock, "[OK] Mise enregistree ! Attente du tirage...\nEND_MSG");
+                        } else {
+                            send_line(client_sock, "[ERREUR] Coins insuffisants !\nEND_MSG");
+                        }
+                    }
+                }
+                else if (buffer[0] == '1') {
+                    leave_roulette(p);
+                    send_line(client_sock, "[INFO] Retour au menu principal...\nEND_MSG");
+                    break; // Sort de la boucle interne -> revient au menu casino
+                }
+            }
         }
-
-        if (p->total_coins == 0) {
-            send_line(client_sock, "Vous n'avez plus de jetons, déconnexion.");
-            return;
-        }
-
-        printf("[%s] commande reçue : %s\n", p->pseudo, buffer);
-
-        char game[32], command[224];
-        if (sscanf(buffer, "GAME %31s %223[^\n]", game, command) != 2) {
-            send_line(client_sock, "Format invalide.");
-            continue;
-        }
-
-        if (strcmp(game, "roulette") == 0) {
-            handle_roulette(p, command);
-        } else {
-            send_line(client_sock, "Jeu inconnu.");
+        else if (buffer[0] == '2') {
+            break; // Sort de la boucle principale -> déconnexion
         }
     }
+
+cleanup:
+    remove_player_by_socket(client_sock);
+    close(client_sock);
+    return NULL;
 }
-
-
 
 int main() {
     int server_sock = create_server(5000);
-    printf("Serveur en écoute sur le port 5000...");
-
     init_player_manager();
+
+    // Lancement du thread qui gère le temps et les tirages de la roulette
+    pthread_t roulette_thread;
+    pthread_create(&roulette_thread, NULL, roulette_timer_thread, NULL);
+
+    printf("Casino ouvert sur le port 5000 (Mode Multi-Clients)...\n");
 
     while (1) {
         int client_sock = accept_client(server_sock);
-        handle_client(client_sock);
-        close_socket(client_sock);
+        pthread_t t;
+        int* sock_ptr = malloc(sizeof(int));
+        *sock_ptr = client_sock;
+        pthread_create(&t, NULL, handle_client, sock_ptr);
+        pthread_detach(t);
     }
-
-    close_socket(server_sock);
     return 0;
 }
