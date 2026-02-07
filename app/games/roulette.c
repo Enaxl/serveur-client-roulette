@@ -8,13 +8,17 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define WAIT_TIME_BETS 30
-#define WAIT_TRANSITION 10
+#define MAX_PLAYERS_ROOM 10 
+#define WAIT_FOR_START 30   // Attente quand 2 joueurs sont présents
+#define WAIT_TIME_BETS 30   // Temps pour miser
+#define WAIT_TRANSITION 30  // Temps pour lire le résultat et décider de rester
 
-static Player* waiting_players[MAX_PLAYERS];
+static Player* waiting_players[MAX_PLAYERS_ROOM];
 static int nb_waiting = 0;
 static pthread_mutex_t roulette_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond_start = PTHREAD_COND_INITIALIZER;
+
+static int is_betting_phase = 0; // État de la phase de jeu pour bloquer la sortie
 
 typedef struct {
     int amount;
@@ -23,9 +27,9 @@ typedef struct {
     int active;
 } CurrentBet;
 
-static CurrentBet current_bets[MAX_PLAYERS];
+static CurrentBet current_bets[MAX_PLAYERS_ROOM];
 
-// --- Logique du tirage ---
+// Logique du tirage
 const char *get_color(int number) {
     if (number == 0) return "vert";
     return (number % 2 == 0) ? "noir" : "rouge";
@@ -46,40 +50,59 @@ RouletteResult spin_roulette() {
     return result;
 }
 
-// --- Gestion des Entrées / Sorties de salle ---
-
+//Gestion des Entrées / Sorties de salle
 void handle_roulette_waiting(Player *p) {
     pthread_mutex_lock(&roulette_mtx);
-    if (nb_waiting < MAX_PLAYERS) {
-        waiting_players[nb_waiting] = p;
-        current_bets[nb_waiting].active = 0;
-        nb_waiting++;
 
-        char msg[256];
-        snprintf(msg, sizeof(msg), "\n[SALLE] Joueurs : %d/2. Attente d'adversaire...\nEND_MSG", nb_waiting);
-        send_message(p->client_socket, msg);
-
-        if (nb_waiting >= 2) pthread_cond_signal(&cond_start);
+    // On refuse si salle pleine ou si une partie a déjà commencé (phase de mise)
+    if (nb_waiting >= MAX_PLAYERS_ROOM || is_betting_phase) {
+        send_line(p->client_socket, "\n[ERREUR] Salle pleine ou partie deja en cours de mise. Attendez le prochain tour.\nEND_MSG");
+        pthread_mutex_unlock(&roulette_mtx);
+        return;
     }
+
+    waiting_players[nb_waiting] = p;
+    current_bets[nb_waiting].active = 0;
+    nb_waiting++;
+
+    char msg[256];
+    snprintf(msg, sizeof(msg), "\n[SALLE] Vous avez rejoint la salle. Joueurs presents : %d/%d.\nEND_MSG", nb_waiting, MAX_PLAYERS_ROOM);
+    send_message(p->client_socket, msg);
+
+    // Si on est au moins 2, on réveille le thread pour lancer le décompte de 30s
+    if (nb_waiting >= 2) {
+        pthread_cond_signal(&cond_start);
+    }
+
     pthread_mutex_unlock(&roulette_mtx);
 }
 
 void leave_roulette(Player *p) {
     pthread_mutex_lock(&roulette_mtx);
+
+    // permet d'interdire un joueur de partir
+    if (is_betting_phase) {
+        send_line(p->client_socket, "\n[REFUS] Impossible de quitter pendant la phase de mise ! Attendez le resultat.\nEND_MSG");
+        pthread_mutex_unlock(&roulette_mtx);
+        return;
+    }
+
     for (int i = 0; i < nb_waiting; i++) {
         if (waiting_players[i]->client_socket == p->client_socket) {
-            // On décale les joueurs restants
+            // Décalage des joueurs restants
             for (int j = i; j < nb_waiting - 1; j++) {
                 waiting_players[j] = waiting_players[j+1];
                 current_bets[j] = current_bets[j+1];
             }
             nb_waiting--;
+            send_line(p->client_socket, "[INFO] Retour au menu principal...\nEND_MSG");
             break;
         }
     }
     pthread_mutex_unlock(&roulette_mtx);
 }
 
+// Placer sa mise sur la roulette
 void place_roulette_bet(Player *p, int amount, const char* type, const char* value) {
     pthread_mutex_lock(&roulette_mtx);
     for (int i = 0; i < nb_waiting; i++) {
@@ -94,45 +117,56 @@ void place_roulette_bet(Player *p, int amount, const char* type, const char* val
     pthread_mutex_unlock(&roulette_mtx);
 }
 
+// Cycle de vie du jeu
 void* roulette_timer_thread(void* arg) {
     (void)arg;
     while(1) {
         pthread_mutex_lock(&roulette_mtx);
+
+        // 1. attente de joueurs
         while (nb_waiting < 2) {
+            is_betting_phase = 0;
             pthread_cond_wait(&cond_start, &roulette_mtx);
         }
+
+        // 2. préparation de 30 secondes pour laisser plusieurs joueurs arrivés
+        for (int i = 0; i < nb_waiting; i++) {
+            send_message(waiting_players[i]->client_socket,
+                "\n[SALLE] 2 joueurs minimum atteints ! La partie debute dans 30s.\n"
+                "[INFO] D'autres joueurs peuvent encore rejoindre pendant ce temps.\nEND_MSG");
+        }
+        pthread_mutex_unlock(&roulette_mtx);
+
+        sleep(WAIT_FOR_START);
+
+        // les joueurs peuvent miser
+        pthread_mutex_lock(&roulette_mtx);
+        is_betting_phase = 1; // on bloque la sortie
 
         for (int i = 0; i < nb_waiting; i++) {
             current_bets[i].active = 0;
             char start_msg[512];
             snprintf(start_msg, sizeof(start_msg),
-                "\n[JEU] La partie commence ! Vous avez 30 secondes.\n"
-                "[INFO] Commandes possibles :\n"
-                " - MISE <montant> color <rouge/noir>\n"
-                " - MISE <montant> number <0-36>\n"
-                " - MISE <montant> parity <pair/impair>\n"
-                "Tapez '1' pour quitter la salle à tout moment.\nEND_MSG");
+                "\n[JEU] Les paris sont OUVERTS ! (Joueurs en piste : %d)\n"
+                "[PARIS] Vous avez 30 secondes pour miser.\n"
+                "Commandes : MISE <montant> color <rouge/noir> | number <0-36> | parity <pair/impair>\n"
+                "La sortie est bloquee pendant cette phase.\nEND_MSG", nb_waiting);
             send_message(waiting_players[i]->client_socket, start_msg);
         }
         pthread_mutex_unlock(&roulette_mtx);
 
-        for(int t=20; t>=0; t-=10) {
-            sleep(10);
-            pthread_mutex_lock(&roulette_mtx);
-            for(int i=0; i<nb_waiting; i++) {
-                char timer_msg[64];
-                snprintf(timer_msg, sizeof(timer_msg), "[TIMER] Plus que %d secondes pour miser...\nEND_MSG", t);
-                send_message(waiting_players[i]->client_socket, timer_msg);
-            }
-            pthread_mutex_unlock(&roulette_mtx);
-        }
+        sleep(WAIT_TIME_BETS);
 
+        // tirage et affichage du résultat
         pthread_mutex_lock(&roulette_mtx);
+        is_betting_phase = 0; // on autorise de nouveau la sortie du joueur de la partie
+
         if (nb_waiting > 0) {
             RouletteResult res = spin_roulette();
             for (int i = 0; i < nb_waiting; i++) {
                 Player *p = waiting_players[i];
                 int gain = 0;
+
                 if (current_bets[i].active) {
                     if (strcmp(current_bets[i].type, "number") == 0 && atoi(current_bets[i].value) == res.number) gain = current_bets[i].amount * 35;
                     else if (strcmp(current_bets[i].type, "color") == 0 && strcmp(current_bets[i].value, res.color) == 0) gain = current_bets[i].amount * 2;
@@ -145,19 +179,20 @@ void* roulette_timer_thread(void* arg) {
                     "\n======================================\n"
                     " RESULTAT : %d %s %s\n"
                     "======================================\n"
-                    "%s Solde : %d coins.\n"
-                    "Prochain tour dans 10s. Tapez '1' pour quitter.\nEND_MSG",
-                    res.number, res.color, res.parity, (gain>0)?"[GAGNE]":"[PERDU]", p->total_coins);
+                    "%s Solde actuel : %d coins.\n"
+                    "Nouvelle partie dans 30s. Appuyez sur '1' pour quitter.\nEND_MSG",
+                    res.number, res.color, res.parity, (gain > 0) ? "[GAGNE]" : "[PERDU]", p->total_coins);
                 send_message(p->client_socket, out);
             }
         }
         pthread_mutex_unlock(&roulette_mtx);
 
-        sleep(10);
+        // transition entre 2 tours
+        sleep(WAIT_TRANSITION);
 
         pthread_mutex_lock(&roulette_mtx);
         if (nb_waiting == 1) {
-            send_message(waiting_players[0]->client_socket, "\n[INFO] Adversaire parti. En attente d'un nouveau joueur (ou tapez '1')...\nEND_MSG");
+            send_message(waiting_players[0]->client_socket, "\n[INFO] Trop de joueurs sont partis. En attente d'un nouvel adversaire...\nEND_MSG");
         }
         pthread_mutex_unlock(&roulette_mtx);
     }

@@ -14,8 +14,10 @@ SERVEUR_BIN = serveur_bin
 # Sources
 # -------------------
 CLIENT_SRC = app/client/client.c app/serveur/network.c
+
 SERVEUR_SRC = app/serveur/serveur.c app/serveur/network.c \
-              app/entity/player.c app/manager/player_manager.c app/games/roulette.c
+              app/entity/player.c app/manager/player_manager.c \
+              app/games/roulette.c app/games/blackjack.c
 
 # -------------------
 # Règles de compilation

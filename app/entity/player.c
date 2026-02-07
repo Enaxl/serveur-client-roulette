@@ -9,20 +9,23 @@ Player create_player(const char *pseudo, int client_socket) {
     strncpy(p.pseudo, pseudo, sizeof(p.pseudo) - 1);
     p.pseudo[sizeof(p.pseudo) - 1] = '\0';
     p.client_socket = client_socket;
-    p.total_coins = 1000;
-    p.connection_time = time(NULL);
+    p.total_coins = 1000; // solde de base
+    p.connection_time = time(NULL); // on ne s'en sert pas, à enlever plus tard
 
     return p;
 }
 
+// ajouter des coins
 void add_coins(Player *p, int amount) {
     p->total_coins += amount;
 }
 
+// savoir si on peut miser
 bool check_coins(Player *p, int amount) {
     return p->total_coins >= amount;
 }
 
+// enlever des coins
 int remove_coins(Player *p, int amount) {
     if (p->total_coins < amount)
         return 0;
