@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+// Création de notre serveur
 int create_server(int port) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) { perror("socket"); exit(1); }
@@ -26,6 +27,7 @@ int create_server(int port) {
     return sock;
 }
 
+// Voir si on peut accepter le client et qu'il n'y a pas d'erreurs
 int accept_client(int server_sock) {
     struct sockaddr_in client_addr;
     socklen_t len = sizeof(client_addr);
@@ -34,6 +36,7 @@ int accept_client(int server_sock) {
     return client_sock;
 }
 
+// ouvrir une connexion entre le client et serveur
 int connect_to_server(const char *host, int port) {
     struct addrinfo hints = {0}, *res;
     char port_str[6];
@@ -59,12 +62,14 @@ int connect_to_server(const char *host, int port) {
     return sock;
 }
 
+// envoie d'une chaine de caractère au serveur avec renvoie de lignes (permet d'éviter pas mal de bugs)
 int send_line(int sock, const char *msg) {
     char buffer[1024];
     snprintf(buffer, sizeof(buffer), "%s\n", msg);
     return write(sock, buffer, strlen(buffer));
 }
 
+// Lit les données caractère par caractère jusqu'à recevoir un \n (évite de lire plusieurs messages en même temps)
 int receive_line(int sock, char *buffer, int size) {
     int i = 0;
     char c;
@@ -78,10 +83,12 @@ int receive_line(int sock, char *buffer, int size) {
     return i;
 }
 
+// envoie message brut
 int send_message(int sock, const char *msg) {
     return write(sock, msg, strlen(msg));
 }
 
+// ferme connexion pour libérer ressources
 void close_socket(int sock) {
     close(sock);
 }
