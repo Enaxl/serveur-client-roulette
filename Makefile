@@ -20,14 +20,14 @@ SERVEUR_SRC = app/serveur/serveur.c app/serveur/network.c \
               app/games/roulette.c app/games/blackjack.c
 
 # -------------------
-# Règles de compilation
+# Règles de compilation (Locales)
 # -------------------
 all: $(CLIENT_BIN) $(SERVEUR_BIN)
 
-$(CLIENT_BIN):
+$(CLIENT_BIN): $(CLIENT_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(CLIENT_SRC) $(LDFLAGS)
 
-$(SERVEUR_BIN):
+$(SERVEUR_BIN): $(SERVEUR_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(SERVEUR_SRC) $(LDFLAGS)
 
 clean:
@@ -37,21 +37,23 @@ clean:
 # Docker / Compose
 # -------------------
 COMPOSE = docker compose -f docker/docker-compose.yaml
-EXEC    = $(COMPOSE) exec
 
+# Démarre sans compiler (utilise les binaires existants)
 up:
 	$(COMPOSE) up -d
 
-rebuild:
+# Force la compilation C PUIS le build Docker
+build: clean all
+	$(COMPOSE) up -d --build --remove-orphans
+
+# Reset total : clean + compilation + build sans cache
+rebuild: clean all
 	$(COMPOSE) down
 	$(COMPOSE) build --no-cache
 	$(COMPOSE) up -d
 
 down:
 	$(COMPOSE) down
-
-build:
-	$(COMPOSE) up -d --build --remove-orphans
 
 logs:
 	$(COMPOSE) logs -f
