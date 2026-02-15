@@ -35,7 +35,7 @@ int main() {
     char buffer[512];
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    int sock = connect_to_server("serveur", 5000);
+    int sock = connect_to_server("127.0.0.1", 5000);
 
     receive_line(sock, buffer, sizeof(buffer));
     printf("%s ", buffer);

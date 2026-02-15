@@ -1,16 +1,30 @@
-Ce projet implémente un serveur de Casino en C utilisant les threads POSIX et les sockets. 
-Il permet à plusieurs clients de s'affronter simultanément à la Roulette et au BlackJack.
+Projet Casino - Sockets C
 
-    Compiler et lancer dans CMD (Première fois) :
+Application client-serveur permettant de jouer à la roulette et au blackjack en simultané via des threads POSIX.
+Prérequis
 
-    make build
+    GCC
 
-    Ou make up si les images Docker existent déjà.
+    Make
 
-    Rejoindre le Casino (Joueur 1) dans CMD :
+    Environnement Unix (Linux, macOS)
 
-    docker exec -it client ./client_bin
+Instructions de lancement
 
-    Rejoindre le Casino (Joueur 2) : Ouvrez un nouveau terminal et tapez la même commande :
+    Compilation Ouvrez un terminal à la racine du projet et compilez les sources :
 
-    docker exec -it client ./client_bin
+    make
+
+    Lancement du serveur Dans le premier terminal, exécutez :
+
+    make run-server
+
+    Lancement des clients Ouvrez un nouveau terminal pour chaque joueur et exécutez :
+
+    make run-client
+
+Nettoyage
+
+Pour supprimer les binaires générés :
+
+make clean
